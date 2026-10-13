@@ -1,0 +1,13 @@
+# Some Apache/CGI setups strip the Authorization header; pass it through to PHP.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+# Only api.php should be reachable from the web.
+<FilesMatch "\.(php)$">
+  Require all denied
+</FilesMatch>
+<Files "api.php">
+  Require all granted
+</Files>
