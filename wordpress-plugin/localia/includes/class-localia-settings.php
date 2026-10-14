@@ -16,21 +16,27 @@ class Localia_Settings {
 
 	public static function defaults() {
 		return array(
-			'agent_id'            => 'home-pc',
-			'secret'              => '',
-			'pair_id'             => '',
-			'site_instructions'   => '',
-			'default_status'      => 'draft',
-			'default_author'      => 0,
-			'lease_minutes'       => 30,
-			'log_days'            => 30,
-			'delete_on_uninstall' => false,
+			'agent_id'             => 'home-pc',
+			'secret'               => '',
+			'pair_id'              => '',
+			'site_instructions'    => '',
+			'default_status'       => 'draft',
+			'instruction_language' => '',
+			'language_only'        => false,
+			'default_author'       => 0,
+			'lease_minutes'        => 30,
+			'log_days'             => 30,
+			'delete_on_uninstall'  => false,
 		);
 	}
 
 	public static function all() {
 		$saved = get_option( self::OPTION, array() );
-		return array_merge( self::defaults(), is_array( $saved ) ? $saved : array() );
+		$all   = array_merge( self::defaults(), is_array( $saved ) ? $saved : array() );
+		if ( '' === $all['instruction_language'] ) {
+			$all['instruction_language'] = Localia_Lang::default_code();
+		}
+		return $all;
 	}
 
 	public static function get( $key ) {
@@ -70,11 +76,14 @@ class Localia_Settings {
 	public static function pairing() {
 		self::ensure_secret();
 		return array(
-			'id'        => (string) self::get( 'pair_id' ),
-			'site'      => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
-			'serverUrl' => self::endpoint_url(),
-			'agentId'   => (string) self::get( 'agent_id' ),
-			'secret'    => (string) self::get( 'secret' ),
+			'id'           => (string) self::get( 'pair_id' ),
+			'site'         => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ),
+			'serverUrl'    => self::endpoint_url(),
+			'agentId'      => (string) self::get( 'agent_id' ),
+			'secret'       => (string) self::get( 'secret' ),
+			// Starting values for the agent's prompt guard; the PC's own setting wins after that.
+			'language'     => Localia_Lang::current(),
+			'languageOnly' => (bool) self::get( 'language_only' ),
 		);
 	}
 

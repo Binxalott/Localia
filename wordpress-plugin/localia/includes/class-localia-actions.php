@@ -11,9 +11,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Localia_Actions {
 
-	const TITLE_FORMAT = "\n\nReply in exactly this format and nothing else:\nTITLE: <a short, catchy post title>\n\n<the post body in Markdown, using ## for section headings>";
-	const BODY_FORMAT  = "\n\nReply with only the post body in Markdown (use ## for section headings). Do not include a title, a preamble or any notes.";
-
 	/** Placeholders available in every prompt. */
 	public static function base_vars() {
 		return array(
@@ -82,12 +79,12 @@ class Localia_Actions {
 
 		$prompt = Localia_Content::fill( $c['prompt'], $vars );
 		if ( '' !== $topic && false === strpos( $c['prompt'], '{topic}' ) ) {
-			$prompt .= "\n\nTopic: " . $topic;
+			$prompt .= "\n\n" . Localia_Lang::get( 'topic' ) . ' ' . $topic;
 		}
 		if ( '' !== $recent && false === strpos( $c['prompt'], '{recent_titles}' ) ) {
-			$prompt .= "\n\nThese posts already exist on the site, so pick a different angle and title:\n" . $recent;
+			$prompt .= "\n\n" . Localia_Lang::get( 'recent' ) . "\n" . $recent;
 		}
-		$prompt .= '' === $c['title'] ? self::TITLE_FORMAT : self::BODY_FORMAT;
+		$prompt .= "\n\n" . Localia_Lang::get( '' === $c['title'] ? 'title_format' : 'body_format' );
 
 		return array(
 			'job'   => array(
@@ -142,9 +139,9 @@ class Localia_Actions {
 		$vars['post_title'] = $post->post_title;
 		$text               = Localia_Content::post_to_prompt_text( $post->post_content );
 		$prompt             = Localia_Content::fill( $c['instructions'], $vars )
-			. "\n\nPost title: " . $post->post_title
-			. "\n\nCurrent post:\n" . $text
-			. self::BODY_FORMAT;
+			. "\n\n" . Localia_Lang::get( 'post_title' ) . ' ' . $post->post_title
+			. "\n\n" . Localia_Lang::get( 'current_post' ) . "\n" . $text
+			. "\n\n" . Localia_Lang::get( 'body_format' );
 
 		return array(
 			'job'   => array(
@@ -173,9 +170,9 @@ class Localia_Actions {
 		$prompt = $instruction;
 		$text   = Localia_Content::post_to_prompt_text( $content );
 		if ( '' !== trim( $title . $text ) ) {
-			$prompt .= "\n\nFor context, here is the post so far.\nTitle: " . $title . "\n\n" . $text;
+			$prompt .= "\n\n" . Localia_Lang::get( 'editor_context' ) . "\n" . Localia_Lang::get( 'editor_title' ) . ' ' . $title . "\n\n" . $text;
 		}
-		$prompt .= "\n\nReply with only the requested content in Markdown, without a preamble or notes.";
+		$prompt .= "\n\n" . Localia_Lang::get( 'editor_format' );
 		return array(
 			'prompt'       => $prompt,
 			'system'       => (string) Localia_Settings::get( 'site_instructions' ),

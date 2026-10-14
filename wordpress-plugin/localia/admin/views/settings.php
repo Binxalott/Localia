@@ -84,6 +84,18 @@ $localia_agent = Localia_Settings::agent_status();
 			</td>
 		</tr>
 		<tr>
+			<th scope="row"><label for="localia-language"><?php esc_html_e( 'Instructions are sent in', 'localia' ); ?></label></th>
+			<td>
+				<select id="localia-language" name="localia[instruction_language]">
+					<?php foreach ( Localia_Lang::languages() as $localia_code => $localia_name ) : ?>
+						<option value="<?php echo esc_attr( $localia_code ); ?>" <?php selected( $localia_s['instruction_language'], $localia_code ); ?>><?php echo esc_html( $localia_name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+				<p><label><input type="checkbox" name="localia[language_only]" value="1" <?php checked( $localia_s['language_only'] ); ?>> <?php esc_html_e( 'Tell my PC to disregard prompts in other languages (extra security)', 'localia' ); ?></label></p>
+				<p class="description"><?php esc_html_e( 'Localia writes its own instructions to the AI in this language. Write your task instructions and “Voice and style” in it too. The checkbox is sent to the agent when you download it (or copy the pairing code); after that, the setting on your PC is the one that counts, so a hacked site can’t switch it off.', 'localia' ); ?></p>
+			</td>
+		</tr>
+		<tr>
 			<th scope="row"><label for="localia-default-status"><?php esc_html_e( 'New tasks save posts as', 'localia' ); ?></label></th>
 			<td>
 				<select id="localia-default-status" name="localia[default_status]">

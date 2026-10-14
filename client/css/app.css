@@ -212,6 +212,7 @@ textarea { resize: vertical; }
 .day.on { background: var(--primary); border-color: var(--primary); color: #fff; }
 #scheduleEditor.disabled, .guard-options.disabled, #guardAiOptions.disabled { opacity: .45; pointer-events: none; }
 .guard-options { display: flex; flex-direction: column; gap: .7rem; margin-top: .8rem; }
+.guard-language { align-items: end; }
 .guard-categories { display: flex; flex-direction: column; gap: .35rem; margin-top: -.4rem; }
 .guard-test summary { cursor: pointer; font-weight: 600; font-size: .85rem; }
 .guard-test textarea { margin-top: .5rem; }

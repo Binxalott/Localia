@@ -31,7 +31,7 @@ class Localia_Content {
 		}
 		if ( $lines ) {
 			$first = trim( $lines[0] );
-			if ( preg_match( '/^(?:\*\*)?title(?:\*\*)?\s*[:\-]\s*(.+)$/i', $first, $m ) ) {
+			if ( preg_match( '/^(?:\*\*)?(?:title|titel|t[ií]tulo|titre|titolo)(?:\*\*)?\s*[:\-]\s*(.+)$/iu', $first, $m ) ) {
 				$title = $m[1];
 			} elseif ( $allow_heading && preg_match( '/^#{1,2}\s+(.+)$/', $first, $m ) ) {
 				$title = $m[1];

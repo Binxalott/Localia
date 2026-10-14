@@ -185,13 +185,15 @@ class Localia_Admin {
 		$agent  = isset( $in['agent_id'] ) ? sanitize_key( $in['agent_id'] ) : 'home-pc';
 		Localia_Settings::update(
 			array(
-				'agent_id'            => '' !== $agent ? $agent : 'home-pc',
-				'site_instructions'   => isset( $in['site_instructions'] ) ? sanitize_textarea_field( $in['site_instructions'] ) : '',
-				'default_status'      => in_array( $status, array( 'draft', 'pending', 'publish' ), true ) ? $status : 'draft',
-				'default_author'      => isset( $in['default_author'] ) ? absint( $in['default_author'] ) : 0,
-				'lease_minutes'       => isset( $in['lease_minutes'] ) ? max( 5, min( 240, absint( $in['lease_minutes'] ) ) ) : 30,
-				'log_days'            => isset( $in['log_days'] ) ? max( 1, min( 365, absint( $in['log_days'] ) ) ) : 30,
-				'delete_on_uninstall' => ! empty( $in['delete_on_uninstall'] ),
+				'agent_id'             => '' !== $agent ? $agent : 'home-pc',
+				'site_instructions'    => isset( $in['site_instructions'] ) ? sanitize_textarea_field( $in['site_instructions'] ) : '',
+				'default_status'       => in_array( $status, array( 'draft', 'pending', 'publish' ), true ) ? $status : 'draft',
+				'default_author'       => isset( $in['default_author'] ) ? absint( $in['default_author'] ) : 0,
+				'instruction_language' => isset( $in['instruction_language'] ) && isset( Localia_Lang::languages()[ $in['instruction_language'] ] ) ? $in['instruction_language'] : 'en',
+				'language_only'        => ! empty( $in['language_only'] ),
+				'lease_minutes'        => isset( $in['lease_minutes'] ) ? max( 5, min( 240, absint( $in['lease_minutes'] ) ) ) : 30,
+				'log_days'             => isset( $in['log_days'] ) ? max( 1, min( 365, absint( $in['log_days'] ) ) ) : 30,
+				'delete_on_uninstall'  => ! empty( $in['delete_on_uninstall'] ),
 			)
 		);
 		self::redirect( 'settings', 'settings_saved' );

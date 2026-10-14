@@ -31,12 +31,12 @@ class Localia_Tasks {
 				'post_id'      => 0,
 				'category'     => 0,
 				'skip_days'    => 30,
-				'instructions' => __( 'Improve this post: make it clearer and more engaging, fix any mistakes, and keep the same meaning, facts and overall length.', 'localia' ),
+				'instructions' => Localia_Lang::get( 'default_rewrite' ),
 				'save_mode'    => 'replace',
 			);
 		}
 		return array(
-			'prompt'        => __( 'Write a helpful, engaging blog post of about 600 words about: {topic}', 'localia' ),
+			'prompt'        => Localia_Lang::get( 'default_prompt' ),
 			'topics'        => '',
 			'topic_mode'    => 'sequence',
 			'title'         => '',

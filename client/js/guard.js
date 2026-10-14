@@ -142,6 +142,79 @@
     return { ok: !unsure, verdict: 'unsure', reason: `The AI double-check gave an unclear answer (“${answer.slice(0, 40)}”).` };
   }
 
+  // ------------------------------------------------------------------ language lock
+  // "Instructions will be written in X; disregard prompts in other languages."
+  // Every sentence long enough to judge is checked, so a foreign-language attack
+  // appended to an otherwise normal job is caught too.
+
+  const LANGUAGES = {
+    en: { name: 'English', words: 'the and of to is in that it for you with on as are this be was have not or by your from at an they all will what about can my if write please which their more do how' },
+    es: { name: 'Español (Spanish)', words: 'el la los las de que y en un una es por con para no se del al lo como más pero sus le ya este esta sobre todo también entre cuando muy sin hay escribe tu tus son está' },
+    fr: { name: 'Français (French)', words: 'le la les de des du et est un une en que qui pour dans pas sur au aux avec ce cette il elle nous vous sont mais ou par plus ne se son ses être écris votre tout comme très' },
+    de: { name: 'Deutsch (German)', words: 'der die das und ist nicht ein eine zu den dem des mit sich auf für von im es auch als an ich sie wir ihr du dass wie oder aber werden wird sind noch nach bei schreibe alle über kein' },
+    it: { name: 'Italiano (Italian)', words: 'il lo la gli le di che e è un una per non con del della dei delle nel nella sono si come ma anche più questo questa al alla ci ha tutto scrivi tuo molto dove quando' },
+    pt: { name: 'Português (Portuguese)', words: 'o os as de que e do da dos das em um uma é para com não no na por mais se como mas ao seu sua ou ser está também muito já quando escreva você isso esta este são' },
+    nl: { name: 'Nederlands (Dutch)', words: 'de het een en van is dat op te in voor niet met zijn er aan ook als maar om door bij nog worden wordt je jij u wij ze dit deze naar uit over kan schrijf alle geen hoe' },
+  };
+  for (const l of Object.values(LANGUAGES)) l.set = new Set(l.words.split(' '));
+
+  // Non-Latin alphabets: a run of these in a job for a Latin-script language is never expected.
+  const SCRIPTS = [
+    ['Cyrillic (e.g. Russian)', /\p{Script=Cyrillic}/gu],
+    ['Greek', /\p{Script=Greek}/gu],
+    ['Arabic', /\p{Script=Arabic}/gu],
+    ['Hebrew', /\p{Script=Hebrew}/gu],
+    ['Chinese / Japanese', /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu],
+    ['Korean', /\p{Script=Hangul}/gu],
+    ['Devanagari (e.g. Hindi)', /\p{Script=Devanagari}/gu],
+    ['Thai', /\p{Script=Thai}/gu],
+  ];
+
+  /**
+   * Find text that is not in the expected language.
+   * @returns {{ok: boolean, reason?: string}}
+   */
+  function checkLanguage(text, expected) {
+    if (!LANGUAGES[expected]) return { ok: true };
+    const t = normalise(text);
+    for (const [name, re] of SCRIPTS) {
+      const hits = t.match(re);
+      if (hits && hits.length >= 8) {
+        const i = t.search(new RegExp(re.source, 'u'));
+        return { ok: false, reason: `Text in ${name} script, but instructions should be in ${LANGUAGES[expected].name}: “${snippet(t, i, 30)}”` };
+      }
+    }
+    // Split into sentences/lines BEFORE collapsing whitespace, then score overlapping
+    // 8-word windows so a foreign sentence glued onto an English one is still seen.
+    const lines = String(text || '').normalize('NFKC').replace(/[​-‏⁠﻿­]/g, '').toLowerCase();
+    const segments = lines.split(/[.!?;:\n<>]+|\s[-–—]\s/);
+    for (const seg of segments) {
+      const words = seg.match(/\p{L}+/gu) || [];
+      if (words.length < 6) continue; // too short to judge (names, quotes, headings)
+      const windows = [words];
+      for (let i = 0; words.length > 10 && i + 8 <= words.length; i += 4) windows.push(words.slice(i, i + 8));
+      for (const win of windows) {
+        const scores = {};
+        for (const [code, l] of Object.entries(LANGUAGES)) scores[code] = win.reduce((n, w) => n + (l.set.has(w) ? 1 : 0), 0);
+        const best = Object.keys(scores).reduce((x, y) => (scores[y] > scores[x] ? y : x));
+        if (best !== expected && scores[best] >= 3 && scores[best] - scores[expected] >= 3) {
+          return { ok: false, reason: `Looks like ${LANGUAGES[best].name}, but instructions should be in ${LANGUAGES[expected].name}: “${win.join(' ').slice(0, 80)}”` };
+        }
+      }
+    }
+    // Whole-text vote: catches jobs made of many short foreign sentences.
+    const all = lines.match(/\p{L}+/gu) || [];
+    if (all.length >= 12) {
+      const scores = {};
+      for (const [code, l] of Object.entries(LANGUAGES)) scores[code] = all.reduce((n, w) => n + (l.set.has(w) ? 1 : 0), 0);
+      const best = Object.keys(scores).reduce((x, y) => (scores[y] > scores[x] ? y : x));
+      if (best !== expected && scores[best] >= 4 && scores[best] >= 2 * scores[expected] + 2) {
+        return { ok: false, reason: `Most of this job looks like ${LANGUAGES[best].name}, but instructions should be in ${LANGUAGES[expected].name}.` };
+      }
+    }
+    return { ok: true };
+  }
+
   /**
    * Full check of a job, as configured.
    * @returns {Promise<{ok: boolean, layer?: 'rules'|'ai', reason?: string}>}
@@ -149,6 +222,10 @@
   async function checkJob(job, settings, llm, signal) {
     if (!settings.guardEnabled) return { ok: true };
     const text = jobText(job);
+    if (settings.guardLanguageOnly) {
+      const lang = checkLanguage(text, settings.guardLanguage || 'en');
+      if (!lang.ok) return { ok: false, layer: 'language', reason: lang.reason };
+    }
     const rules = checkRules(text, settings);
     if (!rules.ok) return { ok: false, layer: 'rules', reason: rules.reason };
     if (settings.guardAi) {
@@ -158,5 +235,5 @@
     return { ok: true };
   }
 
-  global.LocaliaGuard = { CATEGORIES, checkRules, checkWithAi, checkJob, jobText, normalise };
+  global.LocaliaGuard = { CATEGORIES, LANGUAGES, checkRules, checkLanguage, checkWithAi, checkJob, jobText, normalise };
 })(typeof window !== 'undefined' ? window : globalThis);

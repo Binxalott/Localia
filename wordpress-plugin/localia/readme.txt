@@ -70,7 +70,7 @@ Start the agent with the included start script (it opens `http://localhost:8787`
 
 = What if my site gets hacked? Could someone use it to attack my PC? =
 
-The agent on your PC has a **prompt guard**. It checks every job before it reaches your AI and blocks attempts to override instructions, look for files, passwords or crypto wallets, run commands or send data elsewhere. Blocked jobs never reach the AI, and the agent pauses so you can look. Your local AI can only read and write text: it can't open files or run programs on your PC.
+The agent on your PC has a **prompt guard**. It checks every job before it reaches your AI and blocks attempts to override instructions, look for files, passwords or crypto wallets, run commands or send data elsewhere. Blocked jobs never reach the AI, and the agent pauses so you can look. For extra safety, choose the language your instructions are sent in (Settings → Writing defaults) and tick “disregard prompts in other languages”: the agent then blocks anything written in another language. Your local AI can only read and write text: it can't open files or run programs on your PC.
 
 = Is it secure? =
 

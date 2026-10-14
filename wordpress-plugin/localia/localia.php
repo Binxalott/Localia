@@ -30,6 +30,7 @@ if ( ! defined( 'LOCALIA_PRO_URL' ) ) {
 }
 
 require_once LOCALIA_DIR . 'includes/class-localia-settings.php';
+require_once LOCALIA_DIR . 'includes/class-localia-lang.php';
 require_once LOCALIA_DIR . 'includes/class-localia-db.php';
 require_once LOCALIA_DIR . 'includes/class-localia-log.php';
 require_once LOCALIA_DIR . 'includes/class-localia-queue.php';

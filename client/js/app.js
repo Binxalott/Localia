@@ -46,6 +46,8 @@
     wakeLock: false,
 
     guardEnabled: true,
+    guardLanguage: 'en',
+    guardLanguageOnly: false,
     guardCategories: { override: true, secrets: true, commands: true, exfil: true },
     guardExtra: '',
     guardAi: false,
@@ -317,7 +319,8 @@
       // Prompt guard: nothing reaches the LLM until the job passes the checks.
       const verdict = await Guard.checkJob(job, settings, LLM, controller.signal);
       if (!verdict.ok) {
-        result = { status: 'error', rejected: true, error: `Blocked by the PC's prompt guard (${verdict.layer === 'ai' ? 'AI check' : 'rules'}): ${verdict.reason}` };
+        const layer = { ai: 'AI check', language: 'language check', rules: 'rules' }[verdict.layer] || verdict.layer;
+        result = { status: 'error', rejected: true, error: `Blocked by the PC's prompt guard (${layer}): ${verdict.reason}` };
       } else {
         log(`${settings.guardEnabled ? 'Prompt guard: OK. ' : ''}Sending to ${settings.provider === 'ollama' ? 'Ollama' : 'the LLM'}…`);
         const req = buildRequest(job);
@@ -533,6 +536,8 @@
     target.secret = p.secret;
     target.pairId = p.id || '';
     target.siteName = p.site || '';
+    if (p.language && Guard.LANGUAGES[p.language]) target.guardLanguage = p.language;
+    if (typeof p.languageOnly === 'boolean') target.guardLanguageOnly = p.languageOnly;
   }
 
   function decodePairingCode(code) {
@@ -648,6 +653,7 @@
   const form = $('#settingsForm');
 
   function fillForm() {
+    renderGuardLanguages();
     for (const el of $$('[data-setting]', form)) {
       const key = el.dataset.setting;
       const v = draft[key];
@@ -658,6 +664,17 @@
     renderRules();
     renderGuardCategories();
     updateFormDerived();
+  }
+
+  function renderGuardLanguages() {
+    const sel = $('#guardLanguage');
+    if (sel.options.length) return;
+    for (const [code, l] of Object.entries(Guard.LANGUAGES)) {
+      const o = document.createElement('option');
+      o.value = code;
+      o.textContent = l.name;
+      sel.appendChild(o);
+    }
   }
 
   function renderGuardCategories() {
@@ -942,7 +959,7 @@
       const verdict = await Guard.checkJob({ prompt: text }, s, LLM, AbortSignal.timeout(s.requestTimeout * 1000));
       out.textContent = verdict.ok
         ? `✔ Allowed${s.guardAi ? ' (rules and AI check passed)' : ' (rules passed; AI check is off)'}.`
-        : `✘ Blocked by ${verdict.layer === 'ai' ? 'the AI check' : 'the rules'}: ${verdict.reason}`;
+        : `✘ Blocked by ${{ ai: 'the AI check', language: 'the language check', rules: 'the rules' }[verdict.layer]}: ${verdict.reason}`;
     } catch (err) {
       out.textContent = '✘ The check could not run: ' + err.message;
     } finally {
@@ -1010,8 +1027,10 @@
 
   const preset = window.LOCALIA_PRESET;
   let presetApplied = false;
-  if (preset && preset.serverUrl && preset.secret && settings.pairId !== preset.id) {
+  // Apply the preset shipped in js/config.js once (and again only if that file changes).
+  if (preset && preset.serverUrl && preset.secret && settings.presetSeen !== JSON.stringify(preset)) {
     applyPairing(settings, preset);
+    settings.presetSeen = JSON.stringify(preset);
     storageSet(SETTINGS_KEY, settings);
     draft = clone(settings);
     presetApplied = true;

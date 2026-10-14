@@ -224,6 +224,12 @@
           <p class="muted small">Checks every job from the server <strong>before</strong> it reaches your AI, in case your server is ever hacked. Your local AI can only read and write text (it can't open files or run programs on this PC), so this is an extra safety net that stops suspicious jobs early.</p>
           <label class="check"><input type="checkbox" data-setting="guardEnabled"> Check every job before it reaches the AI (recommended)</label>
           <div id="guardOptions" class="guard-options">
+            <div class="grid guard-language">
+              <label>Instructions will be written in
+                <select data-setting="guardLanguage" id="guardLanguage"></select>
+              </label>
+              <label class="check span2"><input type="checkbox" data-setting="guardLanguageOnly"> <span>Disregard (block) prompts written in other languages <span class="muted">— extra security: attacks written in another language can't slip past the checks below</span></span></label>
+            </div>
             <span class="label-text">Block jobs that look like:</span>
             <div id="guardCategories" class="guard-categories"></div>
             <label><span>Also block these words or phrases <span class="muted">(one per line, not case-sensitive)</span></span>
