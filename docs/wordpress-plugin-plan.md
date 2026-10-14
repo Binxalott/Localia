@@ -1,6 +1,8 @@
 # WordPress plugin plan
 
-Decisions agreed so far for turning Localia into a WordPress plugin. Not built yet.
+Decisions agreed so far for turning Localia into a WordPress plugin.
+
+**Status:** the free plugin (v0.1.0) is built in `wordpress-plugin/localia/`. Build an installable zip with `./tools/build-wp-plugin.sh`. The Pro add-on is not started (it goes in the private `binxalott/localia-pro` repo).
 
 ## Packaging
 

@@ -19,6 +19,8 @@
     serverPath: '/localia/api.php',
     agentId: 'home-pc',
     secret: '',
+    pairId: '',
+    siteName: '',
     verifyServer: true,
 
     provider: 'ollama',
@@ -247,6 +249,7 @@
       provider: settings.provider,
       model: settings.model,
       schedule: settings.scheduleMode,
+      poll_interval: settings.pollInterval,
       user_agent: navigator.userAgent.slice(0, 200),
     };
   }
@@ -488,11 +491,36 @@
     if (document.visibilityState === 'visible') acquireWakeLock();
   });
 
+  // ------------------------------------------------------------------ pairing
+  // Connection details come from the WordPress plugin: js/config.js inside the downloaded
+  // agent (window.LOCALIA_PRESET), or a "LOCALIA1:..." pairing code pasted in Settings.
+
+  function applyPairing(target, p) {
+    target.serverHost = p.serverUrl;
+    target.serverProtocol = /^http:/i.test(p.serverUrl) ? 'http' : 'https';
+    target.serverPort = '';
+    target.serverPath = '';
+    target.agentId = p.agentId;
+    target.secret = p.secret;
+    target.pairId = p.id || '';
+    target.siteName = p.site || '';
+  }
+
+  function decodePairingCode(code) {
+    const m = /^LOCALIA1:([A-Za-z0-9+/=\s]+)$/.exec(String(code || '').trim());
+    if (!m) throw new Error('That is not a Localia pairing code.');
+    const bytes = Uint8Array.from(atob(m[1].replace(/\s+/g, '')), (c) => c.charCodeAt(0));
+    const p = JSON.parse(new TextDecoder().decode(bytes));
+    if (!p.serverUrl || !p.agentId || !p.secret) throw new Error('The pairing code is incomplete.');
+    return p;
+  }
+
   // ------------------------------------------------------------------ rendering
 
   const STATE_LABEL = { stopped: 'Stopped', idle: 'Waiting', polling: 'Checking server', working: 'Running job', sleeping: 'Outside schedule', error: 'Connection problem' };
 
   function render() {
+    $('#tagline').textContent = settings.siteName ? 'Working for ' + settings.siteName : 'Your home LLM, working for your server';
     const pill = $('#statusPill');
     pill.className = 'pill pill-' + agent.state;
     pill.textContent = STATE_LABEL[agent.state] + (agent.stateDetail ? ' · ' + agent.stateDetail : '');
@@ -683,6 +711,18 @@
     if (isDirty() || agent.running) {
       e.preventDefault();
       e.returnValue = '';
+    }
+  });
+
+  $('#btnPairingCode').addEventListener('click', () => {
+    const code = prompt('Paste the pairing code from your WordPress site (Localia → Settings):');
+    if (!code) return;
+    try {
+      applyPairing(draft, decodePairingCode(code));
+      fillForm();
+      toast('Connection details filled in — press Save settings');
+    } catch (err) {
+      toast(err.message);
     }
   });
 
@@ -885,6 +925,15 @@
 
   // ------------------------------------------------------------------ boot
 
+  const preset = window.LOCALIA_PRESET;
+  let presetApplied = false;
+  if (preset && preset.serverUrl && preset.secret && settings.pairId !== preset.id) {
+    applyPairing(settings, preset);
+    storageSet(SETTINGS_KEY, settings);
+    draft = clone(settings);
+    presetApplied = true;
+  }
+
   fillForm();
   renderHistory();
   render();
@@ -892,6 +941,7 @@
   try { initialTab = sessionStorage.getItem('localia.tab') || initialTab; } catch (e) { /* ignore */ }
   showTab(setupProblems().length && !storageGet(SETTINGS_KEY, null) ? 'settings' : initialTab);
   log(`Localia agent ${VERSION} loaded${location.protocol === 'file:' ? ' from a local file (if the LLM refuses the connection, use the start script — see Help)' : ''}.`);
+  if (presetApplied) log(`Connection to ${settings.siteName || 'your site'} set up automatically. Choose your model in Settings, then press Start.`, 'ok');
   if (settings.autoStart && !setupProblems().length) start();
 
   // Exposed for debugging from the browser console.

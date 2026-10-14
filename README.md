@@ -24,6 +24,7 @@ It's built for low-volume work like nightly cron jobs and scheduled content gene
 | Part | What it is | Runs on |
 |---|---|---|
 | [`client/`](client) | The desktop agent: a static web page (HTML/JS, no build step) | Any desktop browser on Windows, macOS or Linux |
+| [`wordpress-plugin/localia/`](wordpress-plugin/localia) | **WordPress plugin**: tasks, a daily scheduler, an editor button, and a one-click download of a pre-configured agent | WordPress 6.2+ / PHP 7.4+ |
 | [`server-php/`](server-php) | Queue + endpoint for PHP 7.4+/8.x, using **PDO** (SQLite out of the box, MySQL/MariaDB with placeholders ready) | Any PHP host |
 | [`server-node/`](server-node) | The same thing for Node 18+, zero dependencies (JSON file store; MySQL via `mysql2`) | Any Node host |
 | [`tools/agent-sim.js`](tools/agent-sim.js) | Command-line fake agent for testing a server install | Anywhere with Node |
@@ -139,6 +140,16 @@ Ready-made helpers:
 See the `examples/` folders for cron scripts, an enqueue-now/collect-later pattern, and webhook receivers.
 
 ---
+
+## WordPress plugin
+
+If your site runs on WordPress, you don't need either server. Install the plugin instead:
+
+1. Run `./tools/build-wp-plugin.sh` to build `dist/localia.zip`, then upload it in **Plugins → Add New → Upload Plugin** and activate it.
+2. Go to **Localia → Settings** and click **Download agent for this site**. Unzip it on your home PC and run its start script. The connection details are already filled in.
+3. Create **Tasks** (write new posts, or rewrite existing ones) with times of day, or use the **Localia – your AI** panel in the post editor.
+
+See [`wordpress-plugin/localia/readme.txt`](wordpress-plugin/localia/readme.txt) for details and [`docs/wordpress-plugin-plan.md`](docs/wordpress-plugin-plan.md) for the free/Pro plan.
 
 ## Job options
 
