@@ -13,7 +13,7 @@
       <span class="logo" aria-hidden="true">L</span>
       <div>
         <h1>Localia Agent</h1>
-        <p class="tagline">Your home LLM, working for your server</p>
+        <p class="tagline" id="tagline">Your home LLM, working for your server</p>
       </div>
     </div>
     <span id="statusPill" class="pill pill-stopped">Stopped</span>
@@ -102,6 +102,10 @@
 
         <fieldset>
           <legend>Server connection</legend>
+          <div class="btn-row pairing-row">
+            <button type="button" class="btn btn-sm" id="btnPairingCode">Paste pairing code</button>
+            <span class="muted small">Using the WordPress plugin? Paste the code from its Settings page, or download the agent there with everything pre-filled.</span>
+          </div>
           <div class="grid">
             <label>Protocol
               <select data-setting="serverProtocol">
@@ -300,6 +304,8 @@ Linux (systemd):       sudo systemctl edit ollama  → add:
     </div>
   </template>
 
+  <!-- Optional: written by the WordPress plugin when you download the agent from your site. -->
+  <script src="js/config.js"></script>
   <script src="js/crypto.js"></script>
   <script src="js/schedule.js"></script>
   <script src="js/llm.js"></script>

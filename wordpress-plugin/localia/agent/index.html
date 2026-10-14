@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Localia Agent</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233b6ef5'/%3E%3Cpath d='M9 8v16h14' stroke='white' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='21' cy='11' r='3' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">L</span>
+      <div>
+        <h1>Localia Agent</h1>
+        <p class="tagline" id="tagline">Your home LLM, working for your server</p>
+      </div>
+    </div>
+    <span id="statusPill" class="pill pill-stopped">Stopped</span>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
+    <button class="tab" data-tab="settings" role="tab">Settings <span id="dirtyDot" class="dirty-dot" hidden></span></button>
+    <button class="tab" data-tab="help" role="tab">Help</button>
+  </nav>
+
+  <main>
+    <!-- ================================================================ DASHBOARD -->
+    <section id="tab-dashboard" class="panel active">
+      <div id="setupNotice" class="notice" hidden>
+        <strong>Setup needed:</strong> <span id="setupNoticeText"></span>
+        <button class="link" data-goto="settings">Open settings →</button>
+      </div>
+
+      <div class="controls">
+        <button id="btnStartStop" class="btn btn-primary btn-lg">Start agent</button>
+        <button id="btnPollNow" class="btn">Check now</button>
+        <span id="nextPoll" class="muted"></span>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <h3>Server</h3>
+          <p class="value mono small" id="cardEndpoint">—</p>
+          <p class="muted small">Last contact: <span id="cardLastContact">never</span></p>
+          <p class="muted small">Waiting in queue: <span id="cardPending">—</span></p>
+        </div>
+        <div class="card">
+          <h3>Local LLM</h3>
+          <p class="value" id="cardModel">—</p>
+          <p class="muted small mono" id="cardLlmUrl">—</p>
+        </div>
+        <div class="card">
+          <h3>Schedule</h3>
+          <p class="value" id="cardSchedule">—</p>
+          <p class="muted small" id="cardScheduleNext"></p>
+        </div>
+        <div class="card">
+          <h3>This session</h3>
+          <p class="value"><span id="statDone">0</span> done · <span id="statFailed">0</span> failed</p>
+          <p class="muted small">Avg time: <span id="statAvg">—</span></p>
+        </div>
+      </div>
+
+      <div id="currentJob" class="card current" hidden>
+        <div class="row-between">
+          <h3>Working on <span class="mono" id="curJobId"></span></h3>
+          <span class="mono" id="curJobElapsed">0s</span>
+        </div>
+        <pre class="prompt-preview" id="curJobPrompt"></pre>
+      </div>
+
+      <div class="split">
+        <div class="card grow">
+          <div class="row-between">
+            <h3>Recent jobs</h3>
+            <button id="btnClearHistory" class="btn btn-sm">Clear</button>
+          </div>
+          <div id="history" class="history"><p class="muted small">No jobs yet.</p></div>
+        </div>
+        <div class="card grow">
+          <div class="row-between">
+            <h3>Activity log</h3>
+            <button id="btnClearLog" class="btn btn-sm">Clear</button>
+          </div>
+          <div id="log" class="log mono"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ SETTINGS -->
+    <section id="tab-settings" class="panel">
+      <form id="settingsForm" autocomplete="off" onsubmit="return false">
+        <div class="settings-bar">
+          <span class="muted small">Settings are saved in this browser only (local storage for this page's address).</span>
+          <div class="btn-row">
+            <button type="button" id="btnRevert" class="btn">Revert</button>
+            <button type="button" id="btnSave" class="btn btn-primary">Save settings</button>
+          </div>
+        </div>
+
+        <fieldset>
+          <legend>Server connection</legend>
+          <div class="btn-row pairing-row">
+            <button type="button" class="btn btn-sm" id="btnPairingCode">Paste pairing code</button>
+            <span class="muted small">Using the WordPress plugin? Paste the code from its Settings page, or download the agent there with everything pre-filled.</span>
+          </div>
+          <div class="grid">
+            <label>Protocol
+              <select data-setting="serverProtocol">
+                <option value="https">https (recommended)</option>
+                <option value="http">http (unencrypted)</option>
+              </select>
+            </label>
+            <label class="span2">Server address (domain or IP)
+              <input data-setting="serverHost" placeholder="example.com or 203.0.113.10">
+            </label>
+            <label><span>Port <span class="muted">(blank = default)</span></span>
+              <input data-setting="serverPort" type="number" min="1" max="65535" placeholder="443">
+            </label>
+            <label class="span2">Path to endpoint
+              <input data-setting="serverPath" placeholder="/localia/api.php  or  /localia">
+            </label>
+            <div class="span2">
+              <span class="label-text">Endpoint URL</span>
+              <div class="mono endpoint-preview" id="endpointPreview">—</div>
+            </div>
+          </div>
+          <p id="httpWarning" class="warn small" hidden>⚠ With http, prompts and responses travel unencrypted. Signatures still stop tampering and replay, but anyone on the path can read them. Use https whenever you can (a free Let's Encrypt certificate needs a domain name, not a bare IP).</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Security</legend>
+          <div class="grid">
+            <label>Agent ID
+              <input data-setting="agentId" placeholder="home-pc">
+            </label>
+            <label class="span2">Shared secret
+              <div class="input-group">
+                <input data-setting="secret" type="password" placeholder="must match the server config">
+                <button type="button" class="btn btn-sm" id="btnShowSecret">Show</button>
+                <button type="button" class="btn btn-sm" id="btnGenSecret">Generate</button>
+              </div>
+            </label>
+            <label class="check span3">
+              <input type="checkbox" data-setting="verifyServer"> Verify the server's response signature (recommended — proves replies really come from your server)
+            </label>
+          </div>
+          <p class="muted small">Every request is signed with HMAC-SHA256 using this secret, plus a timestamp and a one-time nonce. The secret itself is never sent over the network.</p>
+        </fieldset>
+
+        <fieldset>
+          <legend>Local LLM</legend>
+          <div class="grid">
+            <label>Runtime
+              <select data-setting="provider" id="providerSelect">
+                <option value="ollama">Ollama</option>
+                <option value="openai">OpenAI-compatible (LM Studio, llama.cpp, vLLM, LocalAI, Jan…)</option>
+              </select>
+            </label>
+            <label class="span2">LLM base URL
+              <input data-setting="llmUrl" placeholder="http://localhost:11434">
+            </label>
+            <label>Model
+              <div class="input-group">
+                <input data-setting="model" list="modelList" placeholder="llama3.1:8b">
+                <button type="button" class="btn btn-sm" id="btnLoadModels">Load</button>
+              </div>
+              <datalist id="modelList"></datalist>
+            </label>
+            <label><span>API key <span class="muted">(optional)</span></span>
+              <input data-setting="llmApiKey" type="password" placeholder="only if your runtime needs one">
+            </label>
+            <label>Request timeout (seconds)
+              <input data-setting="requestTimeout" type="number" min="10" step="10">
+            </label>
+            <label>Temperature
+              <input data-setting="temperature" type="number" min="0" max="2" step="0.05">
+            </label>
+            <label>Max response tokens
+              <input data-setting="maxTokens" type="number" min="1" step="1">
+            </label>
+            <label><span>Context size <span class="muted">(Ollama, blank = model default)</span></span>
+              <input data-setting="numCtx" type="number" min="512" step="512" placeholder="e.g. 8192">
+            </label>
+            <label><span>Keep model loaded <span class="muted">(Ollama keep_alive)</span></span>
+              <input data-setting="keepAlive" placeholder="e.g. 30m, -1 = forever">
+            </label>
+            <label class="check span3"><input type="checkbox" data-setting="allowServerModel"> Let the server pick the model per job (falls back to the model above)</label>
+            <label class="check span3"><input type="checkbox" data-setting="allowServerOptions"> Let the server override temperature / max tokens / JSON format per job</label>
+            <label class="check span3"><input type="checkbox" data-setting="stripThinking"> Remove &lt;think&gt;…&lt;/think&gt; reasoning from responses (DeepSeek-R1, Qwen3…)</label>
+          </div>
+          <div class="btn-row">
+            <button type="button" class="btn" id="btnTestLlm">Test LLM</button>
+            <button type="button" class="btn" id="btnTestServer">Test server connection</button>
+          </div>
+          <pre id="testOutput" class="test-output" hidden></pre>
+        </fieldset>
+
+        <fieldset>
+          <legend>Instructions for the LLM</legend>
+          <label>Role / system prompt (sent with every job)
+            <textarea data-setting="instructions" rows="6" placeholder="You are a helpful content writer for example.com. Write in a friendly, concise tone..."></textarea>
+          </label>
+          <label>When a job includes its own system prompt
+            <select data-setting="systemMode">
+              <option value="append">Use mine, then add the job's (recommended)</option>
+              <option value="override">Use the job's instead of mine</option>
+              <option value="ignore">Ignore the job's, always use mine</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Checking interval</legend>
+          <div class="grid">
+            <label>Check the server every (seconds)
+              <input data-setting="pollInterval" type="number" min="5" step="5">
+            </label>
+            <label class="check span2"><input type="checkbox" data-setting="drainQueue"> When more jobs are waiting, run them back-to-back instead of waiting for the next check</label>
+            <label class="check span3"><input type="checkbox" data-setting="autoStart"> Start the agent automatically when this page opens</label>
+            <label class="check span3"><input type="checkbox" data-setting="wakeLock"> Keep the screen awake while the agent runs (helps stop the PC sleeping)</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Schedule</legend>
+          <div class="radio-row">
+            <label class="check"><input type="radio" name="scheduleMode" value="always" data-setting="scheduleMode"> Run any time the agent is started</label>
+            <label class="check"><input type="radio" name="scheduleMode" value="schedule" data-setting="scheduleMode"> Only during these windows</label>
+          </div>
+          <div id="scheduleEditor">
+            <div id="scheduleRules"></div>
+            <button type="button" class="btn btn-sm" id="btnAddRule">+ Add window</button>
+            <p class="muted small">Overnight windows are fine (e.g. 22:00 → 07:00). Same start and end = all day. Dates are optional. Times use this computer's clock and time zone.</p>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Backup</legend>
+          <div class="btn-row">
+            <button type="button" class="btn" id="btnExport">Export settings</button>
+            <label class="btn file-btn">Import settings<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+            <button type="button" class="btn btn-danger" id="btnReset">Reset to defaults</button>
+          </div>
+          <p class="muted small">The export includes your secret — keep the file private.</p>
+        </fieldset>
+      </form>
+    </section>
+
+    <!-- ================================================================ HELP -->
+    <section id="tab-help" class="panel help">
+      <h2>How Localia works</h2>
+      <ol>
+        <li>Your website or cron job puts a prompt into the Localia queue on your server.</li>
+        <li>This page checks the server every few seconds/minutes, signing each request with your shared secret.</li>
+        <li>The server hands over the next prompt as JSON. This page sends it to the LLM running on this PC.</li>
+        <li>The LLM's answer goes back to the server as JSON. Your app reads it from the queue (or gets a webhook).</li>
+      </ol>
+      <p>Because this PC always makes the outgoing request, your home router, firewall, NAT and changing IP address don't matter. Nothing on this PC is exposed to the internet.</p>
+
+      <h2>Setting up the local LLM</h2>
+      <h3>Ollama</h3>
+      <p>Install from <span class="mono">ollama.com</span>, then pull a model, e.g. <span class="mono">ollama pull llama3.1:8b</span>. Ollama allows pages on <span class="mono">http://localhost</span> by default, so open this page with the included start script (not by double-clicking the file). If you open it any other way, allow its origin:</p>
+      <pre class="code">Windows (PowerShell):  setx OLLAMA_ORIGINS "*"     then restart Ollama
+macOS:                 launchctl setenv OLLAMA_ORIGINS "*"   then restart Ollama
+Linux (systemd):       sudo systemctl edit ollama  → add:
+                       [Service]
+                       Environment="OLLAMA_ORIGINS=*"
+                       then: sudo systemctl restart ollama</pre>
+      <h3>LM Studio</h3>
+      <p>Open the <em>Developer</em> tab, start the server (default port 1234) and switch on <em>Enable CORS</em>. Choose "OpenAI-compatible" here with base URL <span class="mono">http://localhost:1234</span>.</p>
+      <h3>llama.cpp / vLLM / LocalAI / Jan</h3>
+      <p>Choose "OpenAI-compatible" and enter the server's base URL. Make sure it sends CORS headers (llama.cpp's <span class="mono">llama-server</span> does by default).</p>
+
+      <h2>Keeping it running</h2>
+      <ul>
+        <li>Leave this tab open. Browsers slow down timers in background tabs; Localia works around this, but a pinned tab or its own window is most reliable.</li>
+        <li>Stop the PC from sleeping (power settings), or tick "Keep the screen awake".</li>
+        <li>Tick "Start the agent automatically" and add the start script to your OS startup items for a hands-off setup.</li>
+      </ul>
+
+      <h2>Troubleshooting</h2>
+      <dl>
+        <dt>bad_signature / unknown_agent</dt><dd>The agent ID or secret here doesn't match the server's config.</dd>
+        <dt>clock_skew</dt><dd>This PC's clock is more than 5 minutes off. Turn on automatic time sync. (Localia also corrects for it automatically.)</dd>
+        <dt>Could not reach the server</dt><dd>Check the address/port/path, that the server allows CORS (it does by default), and if you use https with a raw IP that the certificate is valid for it.</dd>
+        <dt>Could not reach Ollama / LLM</dt><dd>Is the runtime running? Is CORS allowed (see above)?</dd>
+        <dt>agent_secret_not_configured</dt><dd>The server still has the placeholder secret. Put a real one (16+ characters) in its config.</dd>
+      </dl>
+    </section>
+  </main>
+
+  <template id="ruleTemplate">
+    <div class="rule">
+      <label class="check rule-enabled"><input type="checkbox" data-r="enabled"> On</label>
+      <div class="days"></div>
+      <label>From <input type="time" data-r="start"></label>
+      <label>to <input type="time" data-r="end"></label>
+      <label>Dates <input type="date" data-r="from"></label>
+      <label>– <input type="date" data-r="to"></label>
+      <button type="button" class="btn btn-sm btn-danger" data-r="remove" title="Remove window">✕</button>
+    </div>
+  </template>
+
+  <!-- Optional: written by the WordPress plugin when you download the agent from your site. -->
+  <script src="js/config.js"></script>
+  <script src="js/crypto.js"></script>
+  <script src="js/schedule.js"></script>
+  <script src="js/llm.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
