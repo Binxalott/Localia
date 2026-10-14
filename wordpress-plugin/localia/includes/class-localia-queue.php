@@ -160,7 +160,8 @@ class Localia_Queue {
 
 		if ( isset( $body['status'] ) && 'error' === $body['status'] ) {
 			$error = substr( sanitize_text_field( isset( $body['error'] ) ? (string) $body['error'] : 'agent_error' ), 0, 2000 );
-			if ( $job['attempts'] < $job['max_attempts'] ) {
+			// 'rejected': the PC's prompt guard refused the job, so retrying is pointless.
+			if ( empty( $body['rejected'] ) && $job['attempts'] < $job['max_attempts'] ) {
 				$wpdb->query(
 					$wpdb->prepare(
 						"UPDATE %i SET status = 'queued', not_before = %d, error = %s, lease_until = NULL WHERE id = %s AND lease_token = %s AND status = 'leased'",

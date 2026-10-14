@@ -154,6 +154,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 1.25rem clamp(1rem, 4vw, 2rem
 .history summary .s { font-weight: 700; min-width: 3.2rem; }
 .history .s-done { color: var(--ok); }
 .history .s-error { color: var(--danger); }
+.history .s-blocked { color: var(--danger); text-transform: uppercase; font-size: .75rem; }
 .history summary .p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .history .body { padding: 0 .6rem .6rem; font-size: .82rem; }
 .history pre, .prompt-preview, .test-output, .code {
@@ -209,7 +210,13 @@ textarea { resize: vertical; }
   border-radius: 6px; padding: .3rem .45rem; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer;
 }
 .day.on { background: var(--primary); border-color: var(--primary); color: #fff; }
-#scheduleEditor.disabled { opacity: .45; pointer-events: none; }
+#scheduleEditor.disabled, .guard-options.disabled, #guardAiOptions.disabled { opacity: .45; pointer-events: none; }
+.guard-options { display: flex; flex-direction: column; gap: .7rem; margin-top: .8rem; }
+.guard-categories { display: flex; flex-direction: column; gap: .35rem; margin-top: -.4rem; }
+.guard-test summary { cursor: pointer; font-weight: 600; font-size: .85rem; }
+.guard-test textarea { margin-top: .5rem; }
+.notice-danger { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.notice-danger p { margin: .4rem 0 0; }
 
 /* ---------- help */
 .help { max-width: 820px; }

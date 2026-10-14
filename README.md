@@ -178,6 +178,7 @@ Producer actions (HTTP `POST` JSON with `action`, or `GET ?action=`): `enqueue`,
 - Your apps use a separate **API key**. The agent's secret can't create jobs, and the API key can't fetch them.
 - Placeholder secrets (`CHANGE_ME…`) and secrets shorter than 16 characters are refused.
 - **Use HTTPS.** Signatures stop tampering and replay, but over plain HTTP anyone in between can *read* your prompts and responses. A free Let's Encrypt certificate needs a domain name; a bare IP usually can't get a trusted certificate.
+- **Prompt guard on the PC.** Before any job reaches the local LLM, the agent checks it for attempts to override instructions, requests for files, keys or wallets, commands to run, and attempts to send data elsewhere. An optional second layer asks the local model itself to classify each job as SAFE or UNSAFE. Blocked jobs never reach the LLM, are reported to the server as `rejected` (never retried), and by default pause the agent until you look. This is a safety net: the local model only turns text into text and can't open files or run programs, but if your server is ever compromised it stops obvious abuse early. Configure it under **Settings → Prompt guard**.
 - The agent stores its settings, including the secret, in the browser's local storage on that PC. Treat the PC (and exported settings files) accordingly.
 
 ## Running it reliably

@@ -11,6 +11,7 @@
   const { hmacHex, randomHex, safeEqual } = window.LocaliaCrypto;
   const Schedule = window.LocaliaSchedule;
   const LLM = window.LocaliaLLM;
+  const Guard = window.LocaliaGuard;
 
   const DEFAULTS = {
     serverProtocol: 'https',
@@ -43,6 +44,14 @@
     drainQueue: true,
     autoStart: false,
     wakeLock: false,
+
+    guardEnabled: true,
+    guardCategories: { override: true, secrets: true, commands: true, exfil: true },
+    guardExtra: '',
+    guardAi: false,
+    guardModel: '',
+    guardUnsure: 'block',
+    guardPause: true,
 
     scheduleMode: 'always',
     scheduleRules: [{ enabled: true, days: [0, 1, 2, 3, 4, 5, 6], start: '22:00', end: '07:00', from: '', to: '' }],
@@ -296,7 +305,7 @@
     const started = Date.now();
     agent.currentJob = { id: job.id, prompt: job.prompt || (job.messages || []).map((m) => `[${m.role}] ${m.content}`).join('\n'), started };
     setState('working');
-    log(`Job ${job.id} received (attempt ${job.attempt || 1}). Sending to ${settings.provider === 'ollama' ? 'Ollama' : 'LLM'}…`);
+    log(`Job ${job.id} received (attempt ${job.attempt || 1}).${settings.guardEnabled ? ' Checking it with the prompt guard…' : ''}`);
 
     const controller = new AbortController();
     currentAbort = controller;
@@ -305,11 +314,18 @@
 
     let result;
     try {
-      const req = buildRequest(job);
-      const out = await LLM.chat(settings, req, controller.signal);
-      let text = out.text;
-      if (settings.stripThinking) text = LLM.stripThinking(text);
-      result = { status: 'done', response: text, model: out.model || req.model, usage: out.usage };
+      // Prompt guard: nothing reaches the LLM until the job passes the checks.
+      const verdict = await Guard.checkJob(job, settings, LLM, controller.signal);
+      if (!verdict.ok) {
+        result = { status: 'error', rejected: true, error: `Blocked by the PC's prompt guard (${verdict.layer === 'ai' ? 'AI check' : 'rules'}): ${verdict.reason}` };
+      } else {
+        log(`${settings.guardEnabled ? 'Prompt guard: OK. ' : ''}Sending to ${settings.provider === 'ollama' ? 'Ollama' : 'the LLM'}…`);
+        const req = buildRequest(job);
+        const out = await LLM.chat(settings, req, controller.signal);
+        let text = out.text;
+        if (settings.stripThinking) text = LLM.stripThinking(text);
+        result = { status: 'done', response: text, model: out.model || req.model, usage: out.usage };
+      }
     } catch (e) {
       const msg = controller.signal.aborted
         ? (controller.signal.reason && controller.signal.reason.message) || 'Aborted by agent'
@@ -323,6 +339,7 @@
     const duration = Date.now() - started;
     result.duration_ms = duration;
     if (result.status === 'done') log(`Job ${job.id} finished in ${fmtDuration(duration)} (${result.response.length} chars). Sending result…`, 'ok');
+    else if (result.rejected) log(`Job ${job.id} BLOCKED — ${result.error}`, 'error');
     else log(`Job ${job.id} failed after ${fmtDuration(duration)}: ${result.error}`, 'error');
 
     // Deliver the result, retrying through brief network trouble.
@@ -341,7 +358,9 @@
       }
     }
 
-    if (reply && result.status === 'done') {
+    if (result.rejected) {
+      agent.stats.blocked++;
+    } else if (reply && result.status === 'done') {
       agent.stats.done++;
       agent.stats.totalMs += duration;
     } else {
@@ -352,17 +371,25 @@
     history.unshift({
       id: job.id,
       at: Date.now(),
-      status: result.status,
+      status: result.rejected ? 'blocked' : result.status,
       delivered: !!reply,
       duration,
       model: result.model || null,
-      prompt: truncate(agent.currentJob.prompt, 4000),
+      prompt: truncate(result.rejected ? Guard.jobText(job) : agent.currentJob.prompt, 4000),
       response: truncate(result.response || result.error || '', 8000),
     });
     history = history.slice(0, HISTORY_MAX);
     storageSet(HISTORY_KEY, history);
     agent.currentJob = null;
     renderHistory();
+    if (result.rejected) {
+      agent.guardAlert = result.error;
+      if (settings.guardPause) {
+        log('Agent paused because a job was blocked. Check “Recent jobs”, then press Start agent to continue.', 'warn');
+        stop();
+      }
+      render();
+    }
     return reply;
   }
 
@@ -378,7 +405,8 @@
     pending: null,
     nextAt: null,
     forceOnce: false,
-    stats: { done: 0, failed: 0, totalMs: 0 },
+    stats: { done: 0, failed: 0, blocked: 0, totalMs: 0 },
+    guardAlert: '',
   };
 
   function setState(state, detail = '') {
@@ -442,6 +470,7 @@
       return;
     }
     if (agent.running) return;
+    agent.guardAlert = '';
     agent.running = true;
     agent.gen++;
     log(`Agent started. Checking ${endpointUrl()} every ${settings.pollInterval}s.`, 'ok');
@@ -552,6 +581,9 @@
 
     $('#statDone').textContent = agent.stats.done;
     $('#statFailed').textContent = agent.stats.failed;
+    $('#statBlocked').textContent = agent.stats.blocked;
+    $('#guardAlert').hidden = !agent.guardAlert;
+    $('#guardAlertText').textContent = agent.guardAlert;
     $('#statAvg').textContent = agent.stats.done ? fmtDuration(agent.stats.totalMs / agent.stats.done) : '—';
 
     const cj = agent.currentJob;
@@ -586,7 +618,7 @@
       const sum = document.createElement('summary');
       const st = document.createElement('span');
       st.className = 's s-' + h.status;
-      st.textContent = h.status === 'done' ? 'done' : 'error';
+      st.textContent = h.status === 'done' ? 'done' : h.status === 'blocked' ? 'blocked' : 'error';
       const p = document.createElement('span');
       p.className = 'p';
       p.textContent = h.prompt.replace(/\s+/g, ' ');
@@ -605,7 +637,7 @@
         body.append(l, pre);
       };
       mk(`Job ${h.id}${h.model ? ' · ' + h.model : ''} — prompt`, h.prompt);
-      mk(h.status === 'done' ? 'Response' : 'Error', h.response);
+      mk(h.status === 'done' ? 'Response' : h.status === 'blocked' ? 'Why it was blocked (the LLM never saw this job)' : 'Error', h.response);
       d.append(sum, body);
       box.appendChild(d);
     }
@@ -624,7 +656,23 @@
       else el.value = v == null ? '' : v;
     }
     renderRules();
+    renderGuardCategories();
     updateFormDerived();
+  }
+
+  function renderGuardCategories() {
+    const box = $('#guardCategories');
+    box.textContent = '';
+    for (const [key, cat] of Object.entries(Guard.CATEGORIES)) {
+      const label = document.createElement('label');
+      label.className = 'check';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.dataset.guardCat = key;
+      input.checked = (draft.guardCategories || {})[key] !== false;
+      label.append(input, document.createTextNode(' ' + cat.label));
+      box.appendChild(label);
+    }
   }
 
   function readField(el) {
@@ -641,6 +689,8 @@
     $('#endpointPreview').textContent = endpointUrl(draft) || '—';
     $('#httpWarning').hidden = !(draft.serverProtocol === 'http' || /^http:\/\//i.test(draft.serverHost || ''));
     $('#scheduleEditor').classList.toggle('disabled', draft.scheduleMode !== 'schedule');
+    $('#guardOptions').classList.toggle('disabled', !draft.guardEnabled);
+    $('#guardAiOptions').classList.toggle('disabled', !draft.guardEnabled || !draft.guardAi);
     $('#dirtyDot').hidden = !isDirty();
   }
 
@@ -649,6 +699,9 @@
     if (el.dataset && el.dataset.setting) {
       if (el.type === 'radio' && !el.checked) return;
       draft[el.dataset.setting] = readField(el);
+    }
+    if (el.dataset && el.dataset.guardCat) {
+      draft.guardCategories = { ...(draft.guardCategories || {}), [el.dataset.guardCat]: el.checked };
     }
     updateFormDerived();
   });
@@ -870,6 +923,36 @@
     } finally {
       e.target.disabled = false;
     }
+  });
+
+  // ---- prompt guard test
+
+  $('#btnGuardTest').addEventListener('click', async (e) => {
+    const text = $('#guardTestText').value.trim();
+    const out = $('#guardTestOutput');
+    out.hidden = false;
+    if (!text) {
+      out.textContent = 'Paste a prompt to check first.';
+      return;
+    }
+    const s = { ...normalize(draft), guardEnabled: true };
+    e.target.disabled = true;
+    out.textContent = s.guardAi ? 'Checking (rules, then asking your AI)…' : 'Checking…';
+    try {
+      const verdict = await Guard.checkJob({ prompt: text }, s, LLM, AbortSignal.timeout(s.requestTimeout * 1000));
+      out.textContent = verdict.ok
+        ? `✔ Allowed${s.guardAi ? ' (rules and AI check passed)' : ' (rules passed; AI check is off)'}.`
+        : `✘ Blocked by ${verdict.layer === 'ai' ? 'the AI check' : 'the rules'}: ${verdict.reason}`;
+    } catch (err) {
+      out.textContent = '✘ The check could not run: ' + err.message;
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  $('#btnGuardDismiss').addEventListener('click', () => {
+    agent.guardAlert = '';
+    render();
   });
 
   // ---- import / export / reset

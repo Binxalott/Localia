@@ -335,7 +335,8 @@ class Queue
 
         if (($body['status'] ?? 'done') === 'error') {
             $error = substr((string) ($body['error'] ?? 'agent_error'), 0, 10000);
-            if ($job['attempts'] < $job['max_attempts']) {
+            // 'rejected': the PC's prompt guard refused the job, so retrying is pointless.
+            if (empty($body['rejected']) && $job['attempts'] < $job['max_attempts']) {
                 $st = $this->run("UPDATE {$this->jobs} SET status = 'queued', not_before = ?, error = ?, lease_until = NULL WHERE id = ? AND lease_token = ? AND status = 'leased'", [$t + (int) $this->config['retry_delay_seconds'], $error, $job['id'], $body['lease_token']]);
                 return null;
             }

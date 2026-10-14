@@ -201,7 +201,8 @@ class Queue {
 
     if (body.status === 'error') {
       const errorText = String(body.error || 'agent_error').slice(0, 10000);
-      if (job.attempts < job.max_attempts) {
+      // body.rejected: the PC's prompt guard refused the job, so retrying is pointless.
+      if (!body.rejected && job.attempts < job.max_attempts) {
         await this.store.requeueJob(job.id, body.lease_token, t + this.config.retryDelaySeconds, errorText);
         return { requeued: true };
       }

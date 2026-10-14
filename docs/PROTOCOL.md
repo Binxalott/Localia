@@ -67,6 +67,7 @@ or, on failure, `"status":"error","error":"message"`.
 
 - `lease_token` must match the job's current lease (`409 lease_mismatch`).
 - An `error` result re-queues the job after `retry_delay_seconds` if attempts remain (`requeued: true`); otherwise the job becomes `error`.
+- An `error` result with `"rejected": true` means the agent's prompt guard refused the job (for example an "ignore your instructions" or "find wallet.dat" prompt). It becomes `error` immediately and is never retried.
 - If `pending > 0`, the agent should poll again right away instead of waiting for its interval.
 
 ## Producer requests

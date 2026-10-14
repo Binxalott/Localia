@@ -68,6 +68,10 @@ WordPress runs its scheduler when someone visits the site. Localia also runs it 
 
 Start the agent with the included start script (it opens `http://localhost:8787`), which Ollama allows by default. For LM Studio, switch on “Enable CORS” in its server settings.
 
+= What if my site gets hacked? Could someone use it to attack my PC? =
+
+The agent on your PC has a **prompt guard**. It checks every job before it reaches your AI and blocks attempts to override instructions, look for files, passwords or crypto wallets, run commands or send data elsewhere. Blocked jobs never reach the AI, and the agent pauses so you can look. Your local AI can only read and write text: it can't open files or run programs on your PC.
+
 = Is it secure? =
 
 The agent signs every request with a 48-character secret and a one-time nonce, and verifies the site’s signed replies. The secret is stored in your WordPress options and in the downloaded agent’s `js/config.js`, so keep that folder private. If it leaks, use **Regenerate secret** in Settings.
