@@ -196,6 +196,12 @@ class Queue {
       model: body.model ? String(body.model) : null,
       duration_ms: Number.isFinite(body.duration_ms) ? body.duration_ms : null,
       usage: isObj(body.usage) ? body.usage : null,
+      // Pages the agent retrieved for a web research job (see docs/PROTOCOL.md).
+      sources: Array.isArray(body.sources)
+        ? body.sources.slice(0, 300)
+          .filter((x) => isObj(x) && typeof x.url === 'string' && /^https?:\/\//i.test(x.url) && x.url.length <= 2048)
+          .map((x) => ({ url: x.url, title: typeof x.title === 'string' ? x.title.slice(0, 500) : null }))
+        : null,
       agent: agentId,
     };
 

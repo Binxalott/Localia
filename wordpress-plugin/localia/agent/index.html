@@ -199,6 +199,31 @@
         </fieldset>
 
         <fieldset>
+          <legend>Web research</legend>
+          <p class="muted small">Some jobs ask the agent to research the web first (for example a site's research engine that needs sourced facts). This PC then writes search queries with your LLM, runs them with the provider below, reads the best pages and answers citing only those pages. Searches and page downloads go out from this PC, through the helper in the start script.</p>
+          <div class="grid">
+            <label class="check span3"><input type="checkbox" data-setting="allowWebResearch"> Accept jobs that need web research</label>
+            <label>Search provider
+              <select data-setting="searchProvider" id="searchProviderSelect">
+                <option value="duckduckgo">DuckDuckGo (no setup, best effort)</option>
+                <option value="searxng">SearXNG (your own instance)</option>
+                <option value="brave">Brave Search API (key)</option>
+                <option value="ollama">Ollama web search (ollama.com API key)</option>
+              </select>
+            </label>
+            <label><span>SearXNG URL <span class="muted">(SearXNG only)</span></span>
+              <input data-setting="searchUrl" placeholder="http://localhost:8888">
+            </label>
+            <label><span>API key <span class="muted">(Brave / Ollama)</span></span>
+              <input data-setting="searchKey" type="password" placeholder="only for providers that need one">
+            </label>
+          </div>
+          <div class="btn-row">
+            <button type="button" class="btn" id="btnTestSearch">Test search</button>
+          </div>
+        </fieldset>
+
+        <fieldset>
           <legend>Instructions for the LLM</legend>
           <label>Role / system prompt (sent with every job)
             <textarea data-setting="instructions" rows="6" placeholder="You are a helpful content writer for example.com. Write in a friendly, concise tone..."></textarea>
@@ -274,6 +299,15 @@ Linux (systemd):       sudo systemctl edit ollama  → add:
       <h3>llama.cpp / vLLM / LocalAI / Jan</h3>
       <p>Choose "OpenAI-compatible" and enter the server's base URL. Make sure it sends CORS headers (llama.cpp's <span class="mono">llama-server</span> does by default).</p>
 
+      <h2>Web research</h2>
+      <p>For jobs that ask for it, this page searches the web and reads pages before the LLM answers. Browsers can't read other websites directly, so the start script's helper (serve.py / serve.js) fetches them. It only accepts requests from this page, only fetches public http(s) addresses (never your LAN, except the SearXNG address you enter), and caps page sizes.</p>
+      <ul>
+        <li><strong>DuckDuckGo</strong> needs no setup but may rate-limit automated searches.</li>
+        <li><strong>SearXNG</strong> is a free metasearch engine you run yourself (e.g. <span class="mono">docker run -p 8888:8080 searxng/searxng</span>); enable the <span class="mono">json</span> format under <span class="mono">search: formats:</span> in its settings.yml.</li>
+        <li><strong>Brave Search API</strong> and <strong>Ollama web search</strong> need an API key from their sites.</li>
+      </ul>
+      <p>Research jobs send long prompts (several web pages), so give Ollama a larger context size, e.g. 16384, if the server doesn't set one.</p>
+
       <h2>Keeping it running</h2>
       <ul>
         <li>Leave this tab open. Browsers slow down timers in background tabs; Localia works around this, but a pinned tab or its own window is most reliable.</li>
@@ -287,6 +321,7 @@ Linux (systemd):       sudo systemctl edit ollama  → add:
         <dt>clock_skew</dt><dd>This PC's clock is more than 5 minutes off. Turn on automatic time sync. (Localia also corrects for it automatically.)</dd>
         <dt>Could not reach the server</dt><dd>Check the address/port/path, that the server allows CORS (it does by default), and if you use https with a raw IP that the certificate is valid for it.</dd>
         <dt>Could not reach Ollama / LLM</dt><dd>Is the runtime running? Is CORS allowed (see above)?</dd>
+        <dt>Web research is unavailable</dt><dd>Open this page with the start script instead of opening index.html directly, so its helper runs. After updating Localia, restart the start script.</dd>
         <dt>agent_secret_not_configured</dt><dd>The server still has the placeholder secret. Put a real one (16+ characters) in its config.</dd>
       </dl>
     </section>
@@ -309,6 +344,7 @@ Linux (systemd):       sudo systemctl edit ollama  → add:
   <script src="js/crypto.js"></script>
   <script src="js/schedule.js"></script>
   <script src="js/llm.js"></script>
+  <script src="js/research.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

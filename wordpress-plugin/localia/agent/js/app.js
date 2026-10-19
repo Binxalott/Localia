@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const SETTINGS_KEY = 'localia.settings.v1';
   const HISTORY_KEY = 'localia.history.v1';
   const HISTORY_MAX = 40;
@@ -11,6 +11,7 @@
   const { hmacHex, randomHex, safeEqual } = window.LocaliaCrypto;
   const Schedule = window.LocaliaSchedule;
   const LLM = window.LocaliaLLM;
+  const Research = window.LocaliaResearch;
 
   const DEFAULTS = {
     serverProtocol: 'https',
@@ -35,6 +36,11 @@
     allowServerModel: true,
     allowServerOptions: true,
     stripThinking: true,
+
+    allowWebResearch: true,
+    searchProvider: 'duckduckgo',
+    searchUrl: '',
+    searchKey: '',
 
     instructions: 'You are a helpful assistant working for a website. Follow the instructions in each request exactly and reply with only the requested content.',
     systemMode: 'append',
@@ -248,10 +254,28 @@
       version: VERSION,
       provider: settings.provider,
       model: settings.model,
+      // Models the runtime has, so the server can offer them in its model lists.
+      models: agent.models,
       schedule: settings.scheduleMode,
       poll_interval: settings.pollInterval,
+      // Whether this agent can take jobs that need web research (job.options.research).
+      research: agent.helper && Research.isReady(settings),
+      search_provider: settings.searchProvider,
       user_agent: navigator.userAgent.slice(0, 200),
     };
+  }
+
+  /** Refresh what agentInfo() reports: the runtime's models and whether the helper is running. */
+  async function refreshCapabilities() {
+    try {
+      agent.models = (await LLM.listModels(settings)).slice(0, 100);
+    } catch (e) {
+      agent.models = settings.model ? [settings.model] : [];
+    }
+    agent.helper = !!(await Research.helperInfo(true));
+    if (settings.allowWebResearch && !agent.helper) {
+      log('Web research is unavailable: open this page with the start script so its helper runs (see Help).', 'warn');
+    }
   }
 
   // ------------------------------------------------------------------ job execution
@@ -306,10 +330,17 @@
     let result;
     try {
       const req = buildRequest(job);
-      const out = await LLM.chat(settings, req, controller.signal);
-      let text = out.text;
-      if (settings.stripThinking) text = LLM.stripThinking(text);
-      result = { status: 'done', response: text, model: out.model || req.model, usage: out.usage };
+      const research = job.options && job.options.research && typeof job.options.research === 'object';
+      if (research) {
+        // Searches, page fetches and the answer, all on this PC; see js/research.js.
+        const out = await Research.run(job, req, { settings, signal: controller.signal, log: (m, level) => log(`Job ${job.id}: ${m}`, level) });
+        result = { status: 'done', response: out.text, model: out.model, usage: out.usage, sources: out.sources };
+      } else {
+        const out = await LLM.chat(settings, req, controller.signal);
+        let text = out.text;
+        if (settings.stripThinking) text = LLM.stripThinking(text);
+        result = { status: 'done', response: text, model: out.model || req.model, usage: out.usage };
+      }
     } catch (e) {
       const msg = controller.signal.aborted
         ? (controller.signal.reason && controller.signal.reason.message) || 'Aborted by agent'
@@ -322,7 +353,7 @@
 
     const duration = Date.now() - started;
     result.duration_ms = duration;
-    if (result.status === 'done') log(`Job ${job.id} finished in ${fmtDuration(duration)} (${result.response.length} chars). Sending result…`, 'ok');
+    if (result.status === 'done') log(`Job ${job.id} finished in ${fmtDuration(duration)} (${result.response.length} chars${result.sources ? `, ${result.sources.length} sources` : ''}). Sending result…`, 'ok');
     else log(`Job ${job.id} failed after ${fmtDuration(duration)}: ${result.error}`, 'error');
 
     // Deliver the result, retrying through brief network trouble.
@@ -378,6 +409,8 @@
     pending: null,
     nextAt: null,
     forceOnce: false,
+    models: [],
+    helper: false,
     stats: { done: 0, failed: 0, totalMs: 0 },
   };
 
@@ -446,7 +479,8 @@
     agent.gen++;
     log(`Agent started. Checking ${endpointUrl()} every ${settings.pollInterval}s.`, 'ok');
     acquireWakeLock();
-    loop(agent.gen);
+    const gen = agent.gen;
+    refreshCapabilities().finally(() => loop(gen));
     render();
   }
 
@@ -670,6 +704,8 @@
     out.secret = String(out.secret || '').trim();
     out.llmUrl = String(out.llmUrl || '').trim().replace(/\/+$/, '');
     out.model = String(out.model || '').trim();
+    out.searchUrl = String(out.searchUrl || '').trim().replace(/\/+$/, '');
+    out.searchKey = String(out.searchKey || '').trim();
     out.pollInterval = Math.max(5, Number(out.pollInterval) || DEFAULTS.pollInterval);
     out.requestTimeout = Math.max(10, Number(out.requestTimeout) || DEFAULTS.requestTimeout);
     out.temperature = out.temperature === '' ? DEFAULTS.temperature : Number(out.temperature);
@@ -693,6 +729,7 @@
     toast('Settings saved');
     for (const w of warnings) log(w, 'warn');
     if (restart && wakeSleep) wakeSleep();
+    if (agent.running) refreshCapabilities();
     if (agent.running) settings.wakeLock ? acquireWakeLock() : releaseWakeLock();
   }
 
@@ -841,6 +878,23 @@
       const out = await LLM.chat(s, req, AbortSignal.timeout(s.requestTimeout * 1000));
       const text = s.stripThinking ? LLM.stripThinking(out.text) : out.text;
       showTest(`✔ ${out.model} answered in ${fmtDuration(Date.now() - started)}:\n\n${text}`);
+    } catch (err) {
+      showTest('✘ ' + err.message);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  $('#btnTestSearch').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    const s = normalize(draft);
+    const p = Research.PROVIDERS[s.searchProvider];
+    showTest(`Searching with ${p ? p.label : s.searchProvider}…`);
+    try {
+      if (!(await Research.helperInfo(true))) throw new Error('The helper is not running: open this page with the start script (see Help).');
+      if (!p || !p.ready(s)) throw new Error('Choose a search provider and fill in its URL or key first.');
+      const hits = await p.search(s, 'Super Mario Bros. 3 NES release date', 5, AbortSignal.timeout(30000));
+      showTest(hits.length ? `✔ ${hits.length} results:\n\n${hits.map((h) => `${h.title}\n  ${h.url}`).join('\n')}` : '✘ The search worked but returned no results.');
     } catch (err) {
       showTest('✘ ' + err.message);
     } finally {

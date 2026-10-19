@@ -159,7 +159,7 @@ See [`wordpress-plugin/localia/readme.txt`](wordpress-plugin/localia/readme.txt)
 | `messages` | Optional chat history: `[{"role":"system"\|"user"\|"assistant","content":"…"}]`. If you also send `prompt`, it is added as the last user message. |
 | `system` | Job-specific system prompt. How it combines with the agent's own instructions is set on the agent: append (default), override, or ignore. |
 | `model` | Ask for a specific local model. Used only if the agent allows it; otherwise the agent's own model is used. |
-| `options` | `temperature`, `max_tokens`, `top_p`, `seed`, `stop`, `num_ctx`, and `format` (`"json"` or a JSON Schema object). Used only if the agent allows it. |
+| `options` | `temperature`, `max_tokens`, `top_p`, `seed`, `stop`, `num_ctx`, and `format` (`"json"` or a JSON Schema object). Used only if the agent allows it. Add `research` to have the PC search the web first (see below). |
 | `meta` | Any JSON you want to get back with the job. Never sent to the agent. |
 | `priority` | Integer; higher runs first (default 0). |
 | `not_before` | Unix time or date string; the job stays hidden until then. |
@@ -169,6 +169,18 @@ See [`wordpress-plugin/localia/readme.txt`](wordpress-plugin/localia/readme.txt)
 Job statuses: `queued` → `leased` (the PC is working on it) → `done` / `error` / `cancelled`.
 
 Producer actions (HTTP `POST` JSON with `action`, or `GET ?action=`): `enqueue`, `get`, `cancel`, `list` (`status`, `limit`, `since`), `stats` (queue counts, plus when each agent was last seen).
+
+## Web research
+
+A job with `options.research` (e.g. `{"max_searches":3,"max_fetches":3,"cite_field":"source_urls"}`) makes the agent research the web before answering: the LLM writes search queries, the agent searches, the LLM picks pages to read, and it answers from those pages only. Answers citing a page that wasn't retrieved are sent back once for correction, and every page the LLM saw comes back in the job's `result.sources` so your app can check citations. Details in [docs/PROTOCOL.md](docs/PROTOCOL.md#web-research-jobs-agent-11).
+
+Choose the search provider on the agent's **Settings → Web research**:
+
+- **DuckDuckGo**: no setup, but it rate-limits automated searches after a while.
+- **SearXNG**: free and reliable if you run your own instance (`docker run -p 8888:8080 searxng/searxng`, then enable the `json` format in its `settings.yml`).
+- **Brave Search API** or **Ollama web search**: paste an API key from their sites.
+
+Searches and page downloads go out from the home PC through the start script's helper (browsers can't read other sites directly), so open the agent with the start script. The helper only serves the agent page, fetches only public `http(s)` addresses (never your LAN, except your SearXNG URL), and caps response sizes. Research prompts include several pages, so use a context size of 16K tokens or more.
 
 ## Security
 
