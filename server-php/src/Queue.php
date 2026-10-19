@@ -326,10 +326,22 @@ class Queue
         }
 
         $t = time();
+        // Pages the agent retrieved for a web research job (see docs/PROTOCOL.md).
+        $sources = null;
+        if (is_array($body['sources'] ?? null)) {
+            $sources = [];
+            foreach (array_slice($body['sources'], 0, 300) as $s) {
+                $url = is_array($s) ? ($s['url'] ?? null) : null;
+                if (is_string($url) && strlen($url) <= 2048 && preg_match('#^https?://#i', $url)) {
+                    $sources[] = ['url' => $url, 'title' => is_string($s['title'] ?? null) ? mb_substr($s['title'], 0, 500) : null];
+                }
+            }
+        }
         $resultMeta = json_encode([
             'model'       => isset($body['model']) ? (string) $body['model'] : null,
             'duration_ms' => is_numeric($body['duration_ms'] ?? null) ? $body['duration_ms'] + 0 : null,
             'usage'       => is_array($body['usage'] ?? null) ? $body['usage'] : null,
+            'sources'     => $sources,
             'agent'       => $agentId,
         ], JSON_UNESCAPED_UNICODE);
 

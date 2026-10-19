@@ -63,11 +63,39 @@ Claimable jobs are those that are `queued` with `not_before <= now`, plus `lease
 ```
 or, on failure, `"status":"error","error":"message"`.
 
+Web research jobs (below) also report `"sources":[{"url":"https://…","title":"…"}]` and add `web_searches` and `web_fetches` to `usage`. Servers keep `sources` in the job's `result`.
+
 → `{"ok":true,"accepted":true,"requeued":false,"pending":0,"server_time":…}`
 
 - `lease_token` must match the job's current lease (`409 lease_mismatch`).
 - An `error` result re-queues the job after `retry_delay_seconds` if attempts remain (`requeued: true`); otherwise the job becomes `error`.
 - If `pending > 0`, the agent should poll again right away instead of waiting for its interval.
+
+## Web research jobs (agent 1.1+)
+
+A job can ask the agent to research the web before answering by putting a `research` object in `options`:
+
+```json
+"options": {
+  "format": { …JSON schema for the answer… },
+  "num_ctx": 16384,
+  "research": { "max_searches": 3, "max_fetches": 3, "page_chars": 6000, "cite_field": "source_urls" }
+}
+```
+
+The agent then:
+
+1. asks the LLM for up to `max_searches` search queries,
+2. runs them with the search provider chosen in its settings (DuckDuckGo, SearXNG, Brave Search API or Ollama web search), through the local helper in `serve.py` / `serve.js`,
+3. asks the LLM to pick up to `max_fetches` results and fetches those pages (first `page_chars` characters of their text),
+4. sends the job's messages plus the retrieved pages to the LLM, with `format` as the structured-output format,
+5. if any object in the answer has a `cite_field` array citing no retrieved page, sends it back once for correction.
+
+Every page shown to the LLM (search results and fetched pages, including redirect targets) is returned in `sources`, so the producer can reject citations of anything else. The agent reports `"research": true` in its `agent` info when it can take these jobs; jobs it can't research fail with an error.
+
+The helper only answers requests addressed to `localhost:<port>` that carry a per-run token only the agent page can read, fetches only `http(s)`, refuses private, loopback and link-local addresses (except the SearXNG URL the user configured), re-checks each redirect (max 5) and caps responses at 3 MB.
+
+Agents also report `models` (the runtime's model list) and `search_provider` in their `agent` info.
 
 ## Producer requests
 
